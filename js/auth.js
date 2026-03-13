@@ -7,10 +7,9 @@ Router.register('login', (root) => {
       <div class="login-card fade-in">
         <div class="login-logo">
           <span class="login-emoji">📖</span>
-          <h1>StudyTogether</h1>
+          <h1>Miura Valen</h1>
           <p>Your cosy A/L study companion ✨</p>
         </div>
-
         <div class="flex-col gap-2">
           <div class="input-group">
             <label class="input-label">Email</label>
@@ -24,7 +23,6 @@ Router.register('login', (root) => {
             Sign In
           </button>
         </div>
-
         <p class="text-center text-muted mt-3" style="font-size:0.8rem">
           Don't have an account? Ask your study partner to set it up in Firebase Auth 💌
         </p>
@@ -32,13 +30,13 @@ Router.register('login', (root) => {
     </div>
   `;
 
-  const btn = root.querySelector('#loginBtn');
+  const btn     = root.querySelector('#loginBtn');
   const emailIn = root.querySelector('#loginEmail');
-  const passIn = root.querySelector('#loginPass');
+  const passIn  = root.querySelector('#loginPass');
 
   async function doLogin() {
     const email = emailIn.value.trim();
-    const pass = passIn.value;
+    const pass  = passIn.value;
     if (!email || !pass) { showToast('Please fill in all fields', 'error'); return; }
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Signing in…';
@@ -71,13 +69,11 @@ Router.register('onboarding', (root) => {
           <h1>Welcome!</h1>
           <p>Let's set up your profile</p>
         </div>
-
         <div class="flex-col gap-2">
           <div class="input-group">
             <label class="input-label">Your Name</label>
             <input class="input" type="text" id="obName" placeholder="e.g. Kavya" />
           </div>
-
           <div class="input-group">
             <label class="input-label">Your Stream</label>
             <div class="flex gap-1" id="streamPicker">
@@ -89,18 +85,15 @@ Router.register('onboarding', (root) => {
               </button>
             </div>
           </div>
-
           <div class="input-group">
             <label class="input-label">Pick an Avatar</label>
             <div class="flex gap-1" style="flex-wrap:wrap" id="avatarPicker">
               ${avatars.map((a, i) => `
-                <button class="btn ${i === 0 ? 'btn-rose' : 'btn-ghost'} btn-icon avatar-opt" data-idx="${i}" style="font-size:1.3rem;width:44px;height:44px">
-                  ${a}
-                </button>
+                <button class="btn ${i === 0 ? 'btn-rose' : 'btn-ghost'} btn-icon avatar-opt"
+                  data-idx="${i}" style="font-size:1.3rem;width:44px;height:44px">${a}</button>
               `).join('')}
             </div>
           </div>
-
           <button class="btn btn-primary w-full mt-2" id="obSaveBtn" style="justify-content:center;padding:0.8rem">
             Let's go! 🎉
           </button>
@@ -109,7 +102,6 @@ Router.register('onboarding', (root) => {
     </div>
   `;
 
-  // Stream picker
   root.querySelectorAll('.stream-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedStream = btn.dataset.stream;
@@ -119,7 +111,6 @@ Router.register('onboarding', (root) => {
     });
   });
 
-  // Avatar picker
   root.querySelectorAll('.avatar-opt').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedAvatar = parseInt(btn.dataset.idx);

@@ -11,17 +11,15 @@ function renderShell(root, contentFn) {
       <!-- Mobile header -->
       <div class="mobile-header" id="mobileHeader">
         <button class="hamburger" id="hamburgerBtn">☰</button>
-        <span class="font-display" style="font-size:1.1rem">📖 StudyTogether</span>
+        <span class="font-display" style="font-size:1.1rem">📖 Miura Valen</span>
       </div>
 
-      <!-- Mobile overlay -->
       <div class="mobile-overlay" id="mobileOverlay"></div>
 
-      <!-- Sidebar -->
       <nav class="sidebar" id="sidebar">
         <div class="sidebar-logo">
           <span>📖</span>
-          <span>StudyTogether</span>
+          <span>Miura Valen</span>
         </div>
 
         <div class="nav-section-label">Overview</div>
@@ -72,12 +70,10 @@ function renderShell(root, contentFn) {
         </div>
       </nav>
 
-      <!-- Main -->
       <main class="main-content fade-in" id="pageContent"></main>
     </div>
   `;
 
-  // Wire up nav clicks
   root.querySelectorAll('.nav-item[data-page]').forEach(btn => {
     btn.addEventListener('click', () => {
       Router.go(btn.dataset.page);
@@ -85,12 +81,10 @@ function renderShell(root, contentFn) {
     });
   });
 
-  // Highlight active
   root.querySelectorAll('.nav-item').forEach(el => {
     el.classList.toggle('active', el.dataset.page === Router.current);
   });
 
-  // Mobile menu
   const sidebar = root.querySelector('#sidebar');
   const overlay = root.querySelector('#mobileOverlay');
   const hamburger = root.querySelector('#hamburgerBtn');
@@ -107,6 +101,5 @@ function renderShell(root, contentFn) {
   hamburger?.addEventListener('click', openMobileMenu);
   overlay?.addEventListener('click', closeMobileMenu);
 
-  // Render content into #pageContent
   contentFn(root.querySelector('#pageContent'));
 }

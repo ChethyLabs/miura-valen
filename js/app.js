@@ -17,54 +17,50 @@ const FIREBASE_CONFIG = {
 // ═══════════════════════════════════════════════════════════════
 const SUBJECTS = {
   him: [
-    { id: 'chem', name: 'Chemistry', emoji: '⚗️', color: 'rose', shared: true },
-    { id: 'phy', name: 'Physics', emoji: '⚡', color: 'lavender', shared: true },
-    { id: 'maths', name: 'Combined Maths', emoji: '📐', color: 'sage', shared: false },
+    { id: 'chem',  name: 'Chemistry',      emoji: '⚗️',  color: 'rose',     shared: true  },
+    { id: 'phy',   name: 'Physics',         emoji: '⚡',  color: 'lavender', shared: true  },
+    { id: 'maths', name: 'Combined Maths',  emoji: '📐',  color: 'sage',     shared: false },
   ],
   her: [
-    { id: 'chem', name: 'Chemistry', emoji: '⚗️', color: 'rose', shared: true },
-    { id: 'phy', name: 'Physics', emoji: '⚡', color: 'lavender', shared: true },
-    { id: 'bio', name: 'Biology', emoji: '🌿', color: 'sage', shared: false },
+    { id: 'chem',  name: 'Chemistry',       emoji: '⚗️',  color: 'rose',     shared: true  },
+    { id: 'phy',   name: 'Physics',         emoji: '⚡',  color: 'lavender', shared: true  },
+    { id: 'bio',   name: 'Biology',         emoji: '🌿',  color: 'sage',     shared: false },
   ]
 };
 
 const PAPER_TYPES = {
-  chem: [{ id: 'p1', name: 'Paper 1 (MCQ)', max: 50 }, { id: 'p2', name: 'Paper 2 (Structured)', max: 100 }],
-  phy:  [{ id: 'p1', name: 'Paper 1 (MCQ)', max: 50 }, { id: 'p2', name: 'Paper 2 (Structured)', max: 100 }],
-  bio:  [{ id: 'p1', name: 'Paper 1 (MCQ)', max: 50 }, { id: 'p2', name: 'Paper 2 (Structured)', max: 100 }],
-  maths:[{ id: 'p1', name: 'Paper 1 (Pure)', max: 100 }, { id: 'p2', name: 'Paper 2 (Applied)', max: 100 }],
+  chem:  [{ id: 'p1', name: 'Paper 1 (MCQ)',      max: 50  }, { id: 'p2', name: 'Paper 2 (Structured)', max: 100 }],
+  phy:   [{ id: 'p1', name: 'Paper 1 (MCQ)',      max: 50  }, { id: 'p2', name: 'Paper 2 (Structured)', max: 100 }],
+  bio:   [{ id: 'p1', name: 'Paper 1 (MCQ)',      max: 50  }, { id: 'p2', name: 'Paper 2 (Structured)', max: 100 }],
+  maths: [{ id: 'p1', name: 'Paper 1 (Pure)',     max: 100 }, { id: 'p2', name: 'Paper 2 (Applied)',    max: 100 }],
 };
 
-const YEARS = Array.from({ length: 26 }, (_, i) => 2000 + i); // 2000-2025
+const YEARS  = Array.from({ length: 26 }, (_, i) => 2000 + i);
 const ROUNDS = ['Round 1', 'Round 2', 'Round 3', 'Round 4'];
 
 // ═══════════════════════════════════════════════════════════════
 //  APP STATE
 // ═══════════════════════════════════════════════════════════════
 const App = {
-  firebase: null,
   auth: null,
   db: null,
-  currentUser: null,   // Firebase user
-  profile: null,       // { name, avatar, stream }
-  otherProfile: null,  // partner's profile
+  currentUser: null,
+  profile: null,
+  otherProfile: null,
   otherUID: null,
-  listeners: [],       // Firebase listeners to clean up
+  listeners: [],
 
   async init() {
-    // Load Firebase from CDN (done in HTML)
-    this.firebase = firebase;
     this.auth = firebase.auth();
-    this.db = firebase.database();
+    this.db   = firebase.database();
 
-    // Auth state change
     this.auth.onAuthStateChanged(user => {
       if (user) {
         this.currentUser = user;
         this.loadProfile(user.uid);
       } else {
         this.currentUser = null;
-        this.profile = null;
+        this.profile     = null;
         Router.go('login');
       }
     });
@@ -73,7 +69,6 @@ const App = {
   },
 
   async loadProfile(uid) {
-    // Register in partner index first (so partner can find us)
     await this.registerInPartnerIndex();
     const snap = await this.db.ref(`users/${uid}/profile`).once('value');
     this.profile = snap.val();
@@ -86,46 +81,32 @@ const App = {
   },
 
   async loadPartner() {
-    // Look up partner via the /partners index (public readable)
-    const snap = await this.db.ref('partnerIndex').once('value');
+    const snap  = await this.db.ref('partnerIndex').once('value');
     const index = snap.val() || {};
     for (const uid in index) {
       if (uid !== this.currentUser.uid) {
         this.otherUID = uid;
-        // Fetch their profile directly (allowed by per-uid read rule)
-        const profileSnap = await this.db.ref(`users/${uid}/profile`).once('value');
-        this.otherProfile = profileSnap.val() || null;
+        const ps = await this.db.ref(`users/${uid}/profile`).once('value');
+        this.otherProfile = ps.val() || null;
         break;
       }
     }
   },
 
   async registerInPartnerIndex() {
-    // Register this user in the partner index so they can be discovered
-    const uid = this.currentUser.uid;
-    await this.db.ref(`partnerIndex/${uid}`).set(true);
+    await this.db.ref(`partnerIndex/${this.currentUser.uid}`).set(true);
   },
 
   getSubjects() {
-    const stream = this.profile?.stream || 'him';
-    return SUBJECTS[stream] || SUBJECTS.him;
+    return SUBJECTS[this.profile?.stream] || SUBJECTS.him;
   },
 
   getPartnerSubjects() {
-    const stream = this.otherProfile?.stream === 'her' ? 'her' : 'him';
-    return SUBJECTS[stream] || SUBJECTS.him;
+    return SUBJECTS[this.otherProfile?.stream] || SUBJECTS.him;
   },
 
   getSharedSubjects() {
     return this.getSubjects().filter(s => s.shared);
-  },
-
-  db_ref(path) {
-    return this.db.ref(path);
-  },
-
-  myRef(path) {
-    return this.db.ref(`${path}/${this.currentUser.uid}`);
   },
 
   async login(email, password) {
@@ -135,27 +116,22 @@ const App = {
   async logout() {
     this.cleanListeners();
     await this.auth.signOut();
-    Router.go('login');
   },
 
   cleanListeners() {
-    this.listeners.forEach(ref => ref.off());
+    this.listeners.forEach(ref => { try { ref.off(); } catch(e) {} });
     this.listeners = [];
   },
 
   trackStreak() {
     const uid = this.currentUser?.uid;
     if (!uid) return;
-    const today = new Date().toISOString().split('T')[0];
+    const today     = new Date().toISOString().split('T')[0];
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
     this.db.ref(`users/${uid}/streaks`).once('value').then(snap => {
       const s = snap.val() || { current: 0, longest: 0, lastStudyDate: null };
       if (s.lastStudyDate === today) return;
-      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-      if (s.lastStudyDate === yesterday) {
-        s.current += 1;
-      } else {
-        s.current = 1;
-      }
+      s.current = s.lastStudyDate === yesterday ? s.current + 1 : 1;
       s.longest = Math.max(s.longest, s.current);
       s.lastStudyDate = today;
       this.db.ref(`users/${uid}/streaks`).set(s);
@@ -164,52 +140,62 @@ const App = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-//  ROUTER
+//  ROUTER  — infinite-loop-proof
 // ═══════════════════════════════════════════════════════════════
 const Router = {
   current: null,
-  pages: {},
+  pages:   {},
+  _navigating: false,
 
   init() {
-    const hash = window.location.hash.slice(1) || 'login';
-    this.go(hash);
+    // Don't react to hashchange during init — onAuthStateChanged handles first nav
     window.addEventListener('hashchange', () => {
+      if (this._navigating) return;
       const p = window.location.hash.slice(1);
-      this.go(p, false);
+      if (p && p !== this.current) this.go(p, false);
     });
   },
 
-  register(name, renderFn) {
-    this.pages[name] = renderFn;
+  register(name, fn) {
+    this.pages[name] = fn;
   },
 
   go(page, updateHash = true) {
-    if (updateHash) window.location.hash = page;
-    const root = document.getElementById('root');
-    if (!root) return;
+    // Prevent re-entrant calls
+    if (this._navigating) return;
+    this._navigating = true;
 
-    // Guard routes
-    if (page !== 'login' && page !== 'onboarding' && !App.currentUser) {
-      this.go('login');
-      return;
-    }
+    try {
+      const root = document.getElementById('root');
+      if (!root) return;
 
-    App.cleanListeners();
-    this.current = page;
+      // Auth guard
+      if (page !== 'login' && page !== 'onboarding' && !App.currentUser) {
+        page = 'login';
+      }
 
-    const fn = this.pages[page];
-    if (fn) {
+      // Unknown page → dashboard (only if it exists, else login)
+      if (!this.pages[page]) {
+        page = this.pages['dashboard'] ? 'dashboard' : 'login';
+      }
+
+      // Already on this page — nothing to do
+      if (page === this.current) return;
+
+      if (updateHash) window.location.hash = page;
+
+      App.cleanListeners();
+      this.current = page;
       root.innerHTML = '';
-      fn(root);
-    } else {
-      // Default to dashboard if unknown route
-      this.go('dashboard');
-    }
+      this.pages[page](root);
 
-    // Update sidebar active state
-    document.querySelectorAll('.nav-item').forEach(el => {
-      el.classList.toggle('active', el.dataset.page === page);
-    });
+      document.querySelectorAll('.nav-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.page === page);
+      });
+    } finally {
+      // Always release the lock, even if render throws
+      this._navigating = false;
+    }
   }
 };
 
@@ -257,7 +243,7 @@ function formatDate(iso) {
 }
 
 function pct(score, max) {
-  if (!score || !max) return 0;
+  if (score == null || !max) return 0;
   return Math.round((score / max) * 100);
 }
 
@@ -267,12 +253,7 @@ function scoreColor(p) {
   return 'var(--rose-deep)';
 }
 
-function subjectColor(subjectId) {
-  const map = { chem: 'rose', phy: 'lavender', bio: 'sage', maths: 'gold' };
-  return map[subjectId] || 'muted';
-}
-
 function avatarEmoji(av) {
-  const avatars = ['🌸', '🌿', '⭐', '🍀', '🌙', '🌺', '🦋', '🌸', '📚', '✨'];
-  return avatars[av] || '📚';
+  const avatars = ['🌸', '🌿', '⭐', '🍀', '🌙', '🌺', '🦋', '📚', '✨', '🎯'];
+  return avatars[av] ?? '📚';
 }
