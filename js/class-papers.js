@@ -59,9 +59,10 @@ async function renderPaperList(el, uid, isPartner) {
     return;
   }
 
-  const snap = await App.db.ref(`classPapers/${uid}`).orderByChild('date').once('value');
-  const papers = [];
-  snap.forEach(child => papers.unshift({ id: child.key, ...child.val() }));
+  const snap = await App.db.ref(`classPapers/${uid}`).once('value');
+  const raw = snap.val() || {};
+  const papers = Object.entries(raw).map(([id, v]) => ({ id, ...v }));
+  papers.sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1); // newest first
 
   const name = isPartner ? (App.otherProfile?.name || 'Partner') : (App.profile?.name || 'You');
   const av   = isPartner ? avatarEmoji(App.otherProfile?.avatar) : avatarEmoji(App.profile?.avatar);
@@ -184,14 +185,14 @@ async function renderTrends(el) {
   const otherAv = avatarEmoji(App.otherProfile?.avatar);
 
   const [mySnap, otherSnap] = await Promise.all([
-    App.db.ref(`classPapers/${uid}`).orderByChild('date').once('value'),
-    otherUID ? App.db.ref(`classPapers/${otherUID}`).orderByChild('date').once('value') : Promise.resolve({ val: () => null }),
+    App.db.ref(`classPapers/${uid}`).once('value'),
+    otherUID ? App.db.ref(`classPapers/${otherUID}`).once('value') : Promise.resolve({ val: () => null }),
   ]);
 
-  const myAll = [];
-  mySnap.forEach(c => myAll.push({ id: c.key, ...c.val() }));
-  const otherAll = [];
-  if (otherSnap?.val) otherSnap.forEach?.(c => otherAll.push({ id: c.key, ...c.val() }));
+  const myRawAll = mySnap.val() || {};
+  const myAll = Object.entries(myRawAll).map(([id, v]) => ({ id, ...v }));
+  const otherRawAll = otherSnap?.val?.() || {};
+  const otherAll = Object.entries(otherRawAll).map(([id, v]) => ({ id, ...v }));
 
   const myColor  = 'rgba(169,151,192,1)';
   const myFill   = 'rgba(201,184,216,0.2)';
@@ -421,14 +422,12 @@ async function renderComparison(el) {
   }
 
   const [mySnap, otherSnap] = await Promise.all([
-    App.db.ref(`classPapers/${uid}`).orderByChild('date').once('value'),
-    App.db.ref(`classPapers/${otherUID}`).orderByChild('date').once('value'),
+    App.db.ref(`classPapers/${uid}`).once('value'),
+    App.db.ref(`classPapers/${otherUID}`).once('value'),
   ]);
 
-  const myAll    = [];
-  mySnap.forEach(c => myAll.push({ id: c.key, ...c.val() }));
-  const otherAll = [];
-  otherSnap.forEach(c => otherAll.push({ id: c.key, ...c.val() }));
+  const myAll    = Object.entries(mySnap.val() || {}).map(([id, v]) => ({ id, ...v }));
+  const otherAll = Object.entries(otherSnap.val() || {}).map(([id, v]) => ({ id, ...v }));
 
   const myColor    = 'rgba(169,151,192,1)';
   const myFill     = 'rgba(201,184,216,0.2)';
