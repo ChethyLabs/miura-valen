@@ -5,6 +5,9 @@
 // ═══════════════════════════════════════════════════════════════
 Router.register('class-papers', (root) => {
   renderShell(root, async (content) => {
+    // Always fetch fresh on page load so bundle/unbundle changes are reflected
+    invalidatePaperCache(App.currentUser?.uid);
+    invalidatePaperCache(App.otherUID);
     const mySubjects = App.getSubjects();
     let mode = 'individual'; // 'individual' | 'full'
     let activeTab = 'mine';
@@ -282,7 +285,11 @@ function buildBundles(papers) {
     const scored     = ps.filter(p => p.score != null && p.maxScore);
     const totalScore = scored.reduce((a,p) => a + p.score, 0);
     const totalMax   = scored.reduce((a,p) => a + p.maxScore, 0);
-    const combined   = totalMax ? Math.round(totalScore / totalMax * 100) : null;
+    // Equal weighting: each paper contributes 50% regardless of max marks
+    // e.g. 30/50 MCQ + 35/100 Essay = (60% + 35%) / 2 = 47.5% ≈ 48%
+    const combined = (p1?.score != null && p1?.maxScore && p2?.score != null && p2?.maxScore)
+      ? Math.round((pct(p1.score, p1.maxScore) + pct(p2.score, p2.maxScore)) / 2)
+      : scored.length === 1 ? pct(scored[0].score, scored[0].maxScore) : null;
     const sub        = [...SUBJECTS.him, ...SUBJECTS.her].find(s => s.id === ps[0]?.subject);
     const date       = ps.map(p => p.date).filter(Boolean).sort()[0];
     return { bundleId, papers: ps, p1, p2, totalScore, totalMax, combined, sub, date };
@@ -354,6 +361,7 @@ async function doUnbundle(bundleId) {
     .filter(([, v]) => v.bundleId === bundleId)
     .map(([id]) => App.db.ref(`classPapers/${uid}/${id}/bundleId`).remove());
   await Promise.all(removes);
+  invalidatePaperCache(uid);
   showToast('Unbundled ✓', '');
   Router.go('class-papers');
 }
@@ -440,11 +448,18 @@ async function openBundleModal(uid, onSave) {
     if (p1i) p1i.textContent = p1?.score != null ? `${p1.score}/${p1.maxScore} = ${pct(p1.score,p1.maxScore)}%` : '';
     if (p2i) p2i.textContent = p2?.score != null ? `${p2.score}/${p2.maxScore} = ${pct(p2.score,p2.maxScore)}%` : '';
     if (!p1 && !p2) { prev.textContent = '—'; prev.style.color = 'var(--charcoal)'; return; }
-    const ts = (p1?.score||0) + (p2?.score||0);
-    const tm = (p1?.maxScore||0) + (p2?.maxScore||0);
-    if (!tm) { prev.textContent = '—'; return; }
-    const c = Math.round(ts/tm*100);
-    prev.textContent = `${ts} / ${tm} = ${c}%`;
+    // Equal weighting: average the two percentages
+    let c;
+    if (p1?.score != null && p1?.maxScore && p2?.score != null && p2?.maxScore) {
+      c = Math.round((pct(p1.score, p1.maxScore) + pct(p2.score, p2.maxScore)) / 2);
+      prev.textContent = `${pct(p1.score,p1.maxScore)}% + ${pct(p2.score,p2.maxScore)}% ÷ 2 = ${c}%`;
+    } else if (p1?.score != null && p1?.maxScore) {
+      c = pct(p1.score, p1.maxScore);
+      prev.textContent = `${c}% (P1 only)`;
+    } else if (p2?.score != null && p2?.maxScore) {
+      c = pct(p2.score, p2.maxScore);
+      prev.textContent = `${c}% (P2 only)`;
+    } else { prev.textContent = '—'; return; }
     prev.style.color = scoreColor(c);
   }
 
@@ -461,6 +476,7 @@ async function openBundleModal(uid, onSave) {
     if (p1id) updates[`classPapers/${uid}/${p1id}/bundleId`] = bundleId;
     if (p2id) updates[`classPapers/${uid}/${p2id}/bundleId`] = bundleId;
     await App.db.ref().update(updates);
+    invalidatePaperCache(uid);
     closeModal(overlay);
     showToast('Full paper bundled! 🔗', 'success');
     onSave();
