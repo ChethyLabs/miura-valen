@@ -39,8 +39,48 @@ const YEARS  = Array.from({ length: 26 }, (_, i) => 2000 + i);
 const ROUNDS = ['Round 1', 'Round 2', 'Round 3', 'Round 4'];
 
 // ═══════════════════════════════════════════════════════════════
-//  APP STATE
+//  APP CACHE — localStorage-backed, stale-while-revalidate
 // ═══════════════════════════════════════════════════════════════
+const AppCache = {
+  TTL: 5 * 60 * 1000, // 5 min — revalidate if older than this
+
+  _key(k)  { return 'mv_' + k; },
+
+  get(k) {
+    try {
+      const raw = localStorage.getItem(this._key(k));
+      if (!raw) return null;
+      const { data, ts } = JSON.parse(raw);
+      return { data, stale: (Date.now() - ts) > this.TTL };
+    } catch { return null; }
+  },
+
+  set(k, data) {
+    try { localStorage.setItem(this._key(k), JSON.stringify({ data, ts: Date.now() })); } catch {}
+  },
+
+  del(k) { try { localStorage.removeItem(this._key(k)); } catch {} },
+
+  // Stale-while-revalidate: call renderFn immediately with cached data,
+  // then fetch fresh from Firebase and call renderFn again if data changed
+  async swr(key, fetchFn, renderFn) {
+    const cached = this.get(key);
+    if (cached) {
+      renderFn(cached.data, false); // render immediately from cache
+      if (!cached.stale) return cached.data; // fresh enough, skip network
+    }
+    try {
+      const fresh = await fetchFn();
+      const changed = JSON.stringify(fresh) !== JSON.stringify(cached?.data);
+      this.set(key, fresh);
+      if (changed || !cached) renderFn(fresh, true); // re-render only if different
+      return fresh;
+    } catch(e) {
+      console.warn('[Cache] fetch failed, using cache:', e.message);
+      return cached?.data || null;
+    }
+  }
+};
 const App = {
   auth: null,
   db: null,
@@ -251,6 +291,14 @@ function scoreColor(p) {
   if (p >= 75) return 'var(--sage-deep)';
   if (p >= 50) return 'var(--gold-deep)';
   return 'var(--rose-deep)';
+}
+
+function expandPhoto(img) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:1rem';
+  overlay.innerHTML = `<img src="${img.src}" style="max-width:100%;max-height:90vh;border-radius:var(--radius-lg);object-fit:contain;box-shadow:0 8px 40px rgba(0,0,0,0.4)" />`;
+  overlay.onclick = () => overlay.remove();
+  document.body.appendChild(overlay);
 }
 
 function avatarEmoji(av) {

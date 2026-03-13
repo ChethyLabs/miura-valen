@@ -37,6 +37,9 @@ function renderShell(root, contentFn) {
         <button class="nav-item" data-page="class-papers">
           <span class="nav-icon">🏫</span> Class Papers
         </button>
+        <button class="nav-item" data-page="mistakes">
+          <span class="nav-icon">🔍</span> Mistake Log
+        </button>
         <button class="nav-item" data-page="syllabus">
           <span class="nav-icon">📚</span> Syllabus
         </button>

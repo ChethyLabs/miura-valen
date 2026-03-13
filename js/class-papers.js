@@ -107,12 +107,22 @@ function weekLabel(dateStr) {
   return 'Week of ' + mon.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// In-memory paper cache — cleared when a paper is saved or deleted
+function invalidatePaperCache(uid) {
+  AppCache.del('papers_' + uid);
+  AppCache.del('dash_' + uid);
+}
+
 async function fetchPapers(uid) {
   if (!uid) return [];
+  const cached = AppCache.get('papers_' + uid);
+  if (cached && !cached.stale) return cached.data;
   const snap = await App.db.ref(`classPapers/${uid}`).once('value');
   const raw  = snap.val() || {};
-  return Object.entries(raw).map(([id, v]) => ({ id, ...v }))
-               .sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1);
+  const papers = Object.entries(raw).map(([id, v]) => ({ id, ...v }))
+                       .sort((a, b) => (b.date || '') > (a.date || '') ? 1 : -1);
+  AppCache.set('papers_' + uid, papers);
+  return papers;
 }
 
 function paperCard(p, isPartner) {
@@ -136,18 +146,31 @@ function paperCard(p, isPartner) {
             : `<div class="text-muted">—</div>`}
         </div>
       </div>
-      ${p.photoUrl ? `
+      ${(p.photoUrls?.length || p.photoUrl) ? (() => {
+        const photos = p.photoUrls?.length ? p.photoUrls : [p.photoUrl];
+        return `
         <div class="mt-2">
-          <img src="${p.photoUrl}" alt="Paper" style="max-width:100%;border-radius:var(--radius-md);max-height:220px;object-fit:cover;cursor:pointer"
-            onclick="this.style.maxHeight=this.style.maxHeight==='none'?'220px':'none'" />
-          <div class="text-sm text-muted mt-1">Tap image to expand</div>
-        </div>` : ''}
+          <div style="display:flex;gap:0.5rem;overflow-x:auto;padding-bottom:0.25rem;-webkit-overflow-scrolling:touch">
+            ${photos.map((url, i) => `
+              <div style="flex-shrink:0;position:relative">
+                <img src="${url}" alt="Page ${i+1}"
+                  style="height:140px;width:auto;max-width:200px;border-radius:var(--radius-md);object-fit:cover;cursor:pointer;border:1.5px solid rgba(201,184,216,0.3)"
+                  onclick="expandPhoto(this)" />
+                ${photos.length > 1 ? `<div style="position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,0.5);color:white;font-size:0.65rem;padding:1px 5px;border-radius:999px">p.${i+1}</div>` : ''}
+              </div>`).join('')}
+          </div>
+          ${photos.length > 1 ? `<div class="text-sm text-muted mt-1">${photos.length} pages · scroll to view all</div>` : `<div class="text-sm text-muted mt-1">Tap to expand</div>`}
+        </div>`;
+      })() : ''}
       ${p.aiFeedback ? `
         <div class="ai-card mt-2">
-          <div class="ai-card-header"><span style="font-size:1.2rem">✨</span><div><div class="ai-label">Gemini AI Feedback</div></div></div>
-          <div style="font-size:0.875rem;color:var(--charcoal-light);white-space:pre-wrap;line-height:1.7">${p.aiFeedback}</div>
-        </div>`
-      : p.photoUrl && !isPartner ? `
+          <div class="ai-card-header" style="cursor:pointer" onclick="const b=this.nextElementSibling;b.style.display=b.style.display==='none'?'block':'none'">
+            <span style="font-size:1.2rem">✨</span>
+            <div><div class="ai-label">Gemini Study Coach</div><div style="font-size:0.72rem;color:var(--muted)">tap to expand</div></div>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();Router.go('mistakes')" style="margin-left:auto;font-size:0.75rem">Mistake Log →</button>
+          </div>
+          <div style="display:none;margin-top:0.75rem;font-size:0.85rem;color:var(--charcoal-light);white-space:pre-wrap;line-height:1.8">${p.aiFeedback.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+        </div>` : (p.photoUrls?.length || p.photoUrl) && !isPartner ? `
         <button class="btn btn-ghost btn-sm mt-2" onclick="getAIFeedback('${p.id}','${p.subject}','${p.paperType||'Paper 1'}',this)">
           ✨ Get Gemini Feedback
         </button>` : ''}
@@ -852,9 +875,14 @@ function openAddPaperModal(mySubjects, onSave) {
         <input class="input" type="text" id="cp_notes" placeholder="Any thoughts…" />
       </div>
       <div class="input-group">
-        <label class="input-label">Upload Paper Photo (for AI feedback)</label>
-        <input class="input" type="file" id="cp_photo" accept="image/*" />
-        <small>Gemini will analyze your answers when you tap Get Feedback.</small>
+        <label class="input-label">Paper Photos (for AI feedback)</label>
+        <label id="cp_photo_label" style="display:flex;align-items:center;gap:0.6rem;cursor:pointer;padding:0.65rem 0.9rem;border:1.5px dashed rgba(201,184,216,0.6);border-radius:var(--radius-md);background:rgba(201,184,216,0.06);font-size:0.875rem;color:var(--muted)">
+          <span style="font-size:1.2rem">📎</span>
+          <span id="cp_photo_label_text">Select photos (tap to add more)</span>
+          <input type="file" id="cp_photo" accept="image/*" multiple style="display:none" />
+        </label>
+        <div id="cp_photo_preview" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem"></div>
+        <small style="color:var(--muted);font-size:0.75rem">All pages/photos will be sent to Gemini for feedback.</small>
       </div>
     </div>
     <div class="modal-footer">
@@ -864,6 +892,34 @@ function openAddPaperModal(mySubjects, onSave) {
   `);
   overlay.querySelector('#mClose').onclick  = () => closeModal(overlay);
   overlay.querySelector('#mCancel').onclick = () => closeModal(overlay);
+
+  // Multi-photo accumulator
+  let photoFiles = [];
+
+  overlay.querySelector('#cp_photo').addEventListener('change', function() {
+    Array.from(this.files).forEach(f => photoFiles.push(f));
+    this.value = ''; // reset so same file can be re-added if needed
+    renderPhotoPreviews();
+  });
+
+  function renderPhotoPreviews() {
+    const container = overlay.querySelector('#cp_photo_preview');
+    const label     = overlay.querySelector('#cp_photo_label_text');
+    label.textContent = photoFiles.length ? `${photoFiles.length} photo${photoFiles.length>1?'s':''} selected — tap to add more` : 'Select photos (tap to add more)';
+    container.innerHTML = '';
+    photoFiles.forEach((f, i) => {
+      const url  = URL.createObjectURL(f);
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:relative;width:72px;height:72px;flex-shrink:0';
+      wrap.innerHTML = `
+        <img src="${url}" style="width:72px;height:72px;object-fit:cover;border-radius:var(--radius-md);border:1.5px solid rgba(201,184,216,0.4)" />
+        <button onclick="this.parentNode._removePhoto()" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:var(--charcoal);color:white;border:none;cursor:pointer;font-size:0.7rem;display:flex;align-items:center;justify-content:center;line-height:1">✕</button>
+        <div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:0.6rem;color:white;background:rgba(0,0,0,0.4);border-radius:0 0 var(--radius-md) var(--radius-md);padding:1px 0">p.${i+1}</div>`;
+      wrap._removePhoto = () => { photoFiles.splice(i, 1); renderPhotoPreviews(); };
+      container.appendChild(wrap);
+    });
+  }
+
   overlay.querySelector('#mSave').onclick = async () => {
     const btn = overlay.querySelector('#mSave');
     btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Saving…';
@@ -874,11 +930,17 @@ function openAddPaperModal(mySubjects, onSave) {
     const score=parseFloat(overlay.querySelector('#cp_score').value)||null;
     const maxScore=parseFloat(overlay.querySelector('#cp_max').value)||null;
     const notes=overlay.querySelector('#cp_notes').value;
-    const photoFile=overlay.querySelector('#cp_photo').files[0];
-    let photoUrl=null; if(photoFile) photoUrl=await fileToBase64(photoFile);
+    // Convert all photos to base64
+    const photoUrls = photoFiles.length ? await Promise.all(photoFiles.map(fileToBase64)) : [];
     const id='cp_'+Date.now();
-    await App.db.ref(`classPapers/${uid}/${id}`).set({subject,paperType,date,score,maxScore,notes,photoUrl,aiFeedback:null,createdAt:new Date().toISOString()});
-    closeModal(overlay); showToast('Paper logged! 🏫','success'); App.trackStreak(); onSave();
+    await App.db.ref(`classPapers/${uid}/${id}`).set({
+      subject, paperType, date, score, maxScore, notes,
+      photoUrls,                    // array of base64 strings
+      photoUrl: photoUrls[0]||null, // keep for backwards compat
+      aiFeedback: null,
+      createdAt: new Date().toISOString()
+    });
+    closeModal(overlay); showToast('Paper logged! 🏫','success'); App.trackStreak(); invalidatePaperCache(uid); onSave();
   };
 }
 
@@ -886,41 +948,186 @@ function openAddPaperModal(mySubjects, onSave) {
 //  HELPERS
 // ═══════════════════════════════════════════════════════════════
 async function fileToBase64(file) {
-  return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
+  // Compress: max 1200px wide/tall, 0.7 quality JPEG
+  return new Promise((res, rej) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1200;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else       { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      res(canvas.toDataURL('image/jpeg', 0.72));
+    };
+    img.onerror = rej;
+    img.src = url;
+  });
 }
 
 async function getAIFeedback(paperId, subject, paperType, btn) {
-  const apiKey=localStorage.getItem('gemini_api_key');
-  if(!apiKey){showToast('Add your Gemini API key in Settings ⚙️','error');Router.go('settings');return;}
-  const uid=App.currentUser.uid;
-  const snap=await App.db.ref(`classPapers/${uid}/${paperId}`).once('value');
-  const paper=snap.val();
-  if(!paper?.photoUrl){showToast('No photo for this paper','error');return;}
-  btn.disabled=true; btn.innerHTML='<span class="loading-heart" style="font-size:1rem">✨</span> Thinking…';
+  const apiKey = localStorage.getItem('gemini_api_key');
+  if (!apiKey) { showToast('Add your Gemini API key in Settings ⚙️', 'error'); Router.go('settings'); return; }
+
+  const uid   = App.currentUser.uid;
+  const snap  = await App.db.ref(`classPapers/${uid}/${paperId}`).once('value');
+  const paper = snap.val();
+  const photos = paper?.photoUrls?.length ? paper.photoUrls : (paper?.photoUrl ? [paper.photoUrl] : []);
+  if (!photos.length) { showToast('No photos for this paper', 'error'); return; }
+
+  console.log('[AI] sending', photos.length, 'photo(s) for paper', paperId);
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-heart" style="font-size:1rem">✨</span> Analyzing…';
+
   try {
-    const subName=[...SUBJECTS.him,...SUBJECTS.her].find(s=>s.id===subject)?.name||subject;
-    const prompt=`This is a ${subName} ${paperType} answer paper by an A/L student in Sri Lanka.\n\nProvide:\n1. Overall assessment\n2. Weak areas\n3. Common mistakes\n4. Improvement advice\n5. Topics to prioritize\n\nBe encouraging and specific.`;
-    const base64Data=paper.photoUrl.split(',')[1];
-    const mimeType=paper.photoUrl.split(';')[0].split(':')[1];
-    const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{inlineData:{mimeType,data:base64Data}},{text:prompt}]}],generationConfig:{temperature:0.7,maxOutputTokens:1024}})
+    const subName = [...SUBJECTS.him, ...SUBJECTS.her].find(s => s.id === subject)?.name || subject;
+
+    // Past mistakes for context
+    const pastSnap    = await App.db.ref(`mistakeLog/${uid}/${subject}`).once('value');
+    const pastEntries = pastSnap.val() ? Object.values(pastSnap.val()) : [];
+    const pastContext = pastEntries.length
+      ? '\n\nPast mistakes this student has made in ' + subName + ':\n' +
+        pastEntries.slice(-10).map(e => '- ' + e.text).join('\n')
+      : '';
+
+    const prompt =
+`You are a study coach for a Sri Lankan A/L student studying ${subName} (${paperType}).${pastContext}
+
+The student has uploaded ${photos.length} photo(s) of a class paper. Look carefully at the paper.
+
+IMPORTANT RULES:
+- Only report mistakes you can ACTUALLY SEE on the paper (wrong answers, crossed out work, red marks, low scores, teacher corrections).
+- Do NOT guess or assume mistakes based on topic names.
+- If you cannot clearly read the paper, say so honestly rather than inventing mistakes.
+- Be specific: reference the question number AND what exactly was wrong.
+
+Respond using EXACTLY this format. Each item on its own line starting with "- ":
+
+MISTAKES
+- (only mistakes visibly present on the paper)
+
+LESSONS
+- (key concepts to revise based on the actual mistakes above)
+
+PATTERNS
+- (recurring error types from what you can actually see)
+
+NEXT STEPS
+- (specific revision actions based only on the real mistakes above)
+
+No intro. No conclusion. No markdown. Just the four sections.`;
+
+    const imageParts = photos.map(url => ({
+      inlineData: {
+        mimeType: url.split(';')[0].split(':')[1],
+        data: url.split(',')[1]
+      }
+    }));
+
+    console.log('[AI] imageParts count:', imageParts.length);
+
+    const reqBody = JSON.stringify({
+      contents: [{ parts: [...imageParts, { text: prompt }] }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 8192 }
     });
-    const data=await response.json();
-    if(data.error) throw new Error(data.error.message);
-    const feedback=data.candidates?.[0]?.content?.parts?.[0]?.text||'No feedback.';
+
+    // Retry up to 3 times on 503
+    let response, attempts = 0;
+    while (attempts < 3) {
+      attempts++;
+      btn.innerHTML = `<span class="loading-heart" style="font-size:1rem">✨</span> Analyzing${attempts > 1 ? ' (retry ' + attempts + ')' : ''}…`;
+      response = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + apiKey,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: reqBody }
+      );
+      if (response.status !== 503) break;
+      await new Promise(r => setTimeout(r, 2000 * attempts));
+    }
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    const feedback = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!feedback) throw new Error('Empty response from Gemini');
+
+    console.log('[AI] raw feedback:\n', feedback);
+
+    // Save full text
     await App.db.ref(`classPapers/${uid}/${paperId}/aiFeedback`).set(feedback);
-    const paperEl=document.querySelector(`#paper_${paperId}`);
-    if(paperEl){btn.remove();const d=document.createElement('div');d.className='ai-card mt-2';
-      d.innerHTML=`<div class="ai-card-header"><span style="font-size:1.2rem">✨</span><div><div class="ai-label">Gemini AI Feedback</div></div></div>
-        <div style="font-size:0.875rem;color:var(--charcoal-light);white-space:pre-wrap;line-height:1.7">${feedback}</div>`;
-      paperEl.appendChild(d);}
-    showToast('AI feedback ready! ✨','success');
-  } catch(e){showToast('AI failed: '+e.message,'error');btn.disabled=false;btn.innerHTML='✨ Get Gemini Feedback';}
+    invalidatePaperCache(uid);
+
+    // ── Extract each section robustly ──
+    // Works whether Gemini uses our plain format OR slips into markdown
+    function extractSection(text, header) {
+      // Match header (with or without ** or #) then grab until next header or end
+      const pattern = new RegExp(
+        '(?:^|\\n)(?:\\*{0,2}#*\\s*)' + header + '(?:\\*{0,2})\\s*\\n([\\s\\S]*?)(?=\\n(?:\\*{0,2}#*\\s*)(?:MISTAKES|LESSONS|PATTERNS|NEXT STEPS)(?:\\*{0,2})\\s*\\n|$)',
+        'i'
+      );
+      const m = text.match(pattern);
+      return m ? m[1].trim() : '';
+    }
+
+    function extractLines(block) {
+      return block
+        .split('\n')
+        .map(l => l.replace(/^[-•*\d.)]+\s*/, '').replace(/\*\*/g, '').trim())
+        .filter(l => l.length > 5);
+    }
+
+    const lessonsBlock = extractSection(feedback, 'LESSONS');
+    const lessons      = extractLines(lessonsBlock);
+
+    console.log('[AI] lessons block:', lessonsBlock);
+    console.log('[AI] parsed lessons:', lessons);
+
+    // Save each lesson as a SEPARATE entry with a small delay to avoid ID collision
+    const source = 'AI · ' + subName + ' ' + paperType + ' · ' + formatDate(paper.date);
+    for (let i = 0; i < lessons.length; i++) {
+      await appendMistake(uid, subject, lessons[i], source, true, 'class-papers');
+      if (i < lessons.length - 1) await new Promise(r => setTimeout(r, 50));
+    }
+
+    if (lessons.length) showToast(lessons.length + ' lessons saved to Mistake Log ✨', 'success');
+    else showToast('Feedback saved — check console for raw output ✨', 'success');
+
+    // Display
+    const paperEl = document.querySelector('#paper_' + paperId);
+    if (paperEl) {
+      btn.remove();
+      const d = document.createElement('div');
+      d.className = 'ai-card mt-2';
+      const escaped = feedback.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      d.innerHTML =
+        '<div class="ai-card-header" style="cursor:pointer" onclick="const b=this.nextElementSibling;b.style.display=b.style.display===\'none\'?\'block\':\'none\'">' +
+          '<span style="font-size:1.2rem">✨</span>' +
+          '<div>' +
+            '<div class="ai-label">Gemini Study Coach</div>' +
+            '<div style="font-size:0.72rem;color:var(--muted)">' + photos.length + ' page(s) · ' + lessons.length + ' lessons logged · tap to expand</div>' +
+          '</div>' +
+          '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();Router.go(\'mistakes\')" style="margin-left:auto;font-size:0.75rem">Mistake Log →</button>' +
+        '</div>' +
+        '<div style="display:none;margin-top:0.75rem;font-size:0.85rem;color:var(--charcoal-light);white-space:pre-wrap;line-height:1.8">' + escaped + '</div>';
+      paperEl.appendChild(d);
+    }
+
+  } catch(e) {
+    console.error('[AI] error:', e);
+    showToast('AI failed: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '✨ Get Gemini Feedback';
+  }
 }
 
 async function deletePaper(paperId) {
   if(!confirm('Delete this paper?')) return;
-  await App.db.ref(`classPapers/${App.currentUser.uid}/${paperId}`).remove();
+  const uid = App.currentUser.uid;
+  await App.db.ref(`classPapers/${uid}/${paperId}`).remove();
+  invalidatePaperCache(uid);
   showToast('Deleted',''); Router.go('class-papers');
 }
