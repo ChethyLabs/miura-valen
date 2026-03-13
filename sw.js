@@ -11,11 +11,7 @@
 const _self = /** @type {ServiceWorkerGlobalScope} */ (self);
 
 // !! Bump this date any time you deploy to force cache refresh !!
-<<<<<<< HEAD
 const CACHE_VERSION = '2026-03-15';
-=======
-const CACHE_VERSION = '2026-03-14';
->>>>>>> fd149548b0759eb7876b50f83679755c2e483326
 const CACHE_NAME    = 'miura-valen-' + CACHE_VERSION;
 
 // Only cache things that truly never change between deploys
