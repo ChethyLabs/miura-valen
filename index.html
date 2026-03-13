@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StudyTogether 📖</title>
+  <meta name="description" content="A cosy A/L study tracker for two" />
+  <meta name="theme-color" content="#FAF7F2" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Firebase v8 (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <div id="root">
+    <!-- Initial loading screen -->
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;font-family:'Georgia',serif;">
+      <div style="font-size:4rem;animation:spin 2s linear infinite">📖</div>
+      <p style="color:#9E8A79;font-size:0.9rem">Loading StudyTogether…</p>
+    </div>
+  </div>
+
+  <style>
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
+
+  <!-- App scripts -->
+  <script src="js/app.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/past-papers.js"></script>
+  <script src="js/class-papers.js"></script>
+  <script src="js/syllabus.js"></script>
+  <script src="js/pages.js"></script>
+
+  <script>
+    // Initialize Firebase with config from app.js
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+
+    // Boot the app
+    window.addEventListener('DOMContentLoaded', () => {
+      App.init();
+    });
+  </script>
+
+</body>
+</html>
