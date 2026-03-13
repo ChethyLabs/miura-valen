@@ -96,6 +96,9 @@ async function renderPaperList(el, uid, isPartner) {
     grouped[wk].push(p);
   });
 
+  console.log('[DEBUG2] papers after sort:', papers.map(p=>({id:p.id,date:p.date})));
+  console.log('[DEBUG2] grouped:', JSON.stringify(Object.entries(grouped).map(([w,ps])=>({week:w,count:ps.length,ids:ps.map(p=>p.id)}))));
+
   let html = `<div class="flex-col gap-3">`;
 
   for (const [week, wkPapers] of Object.entries(grouped)) {
