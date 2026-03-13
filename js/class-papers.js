@@ -78,9 +78,13 @@ async function renderPaperList(el, uid, isPartner) {
   // Group by week
   function weekLabel(dateStr) {
     if (!dateStr) return 'Unknown week';
-    const d = new Date(dateStr);
+    // Parse date safely (avoid timezone shift with UTC)
+    const [yr, mo, dy] = dateStr.split('-').map(Number);
+    const d = new Date(yr, mo - 1, dy); // local time, no UTC shift
+    const dow = d.getDay(); // 0=Sun..6=Sat
+    const diff = dow === 0 ? -6 : 1 - dow; // shift to Monday
     const mon = new Date(d);
-    mon.setDate(d.getDate() - d.getDay() + 1);
+    mon.setDate(d.getDate() + diff);
     return 'Week of ' + mon.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
@@ -204,10 +208,13 @@ async function renderTrends(el) {
     const wkMap = {};
     papers.forEach(p => {
       if (!p.date) return;
-      const d = new Date(p.date);
+      const [yr, mo, dy] = p.date.split('-').map(Number);
+      const d = new Date(yr, mo - 1, dy);
+      const dow = d.getDay();
+      const diff = dow === 0 ? -6 : 1 - dow;
       const mon = new Date(d);
-      mon.setDate(d.getDate() - ((d.getDay()+6)%7));
-      const key = mon.toISOString().split('T')[0];
+      mon.setDate(d.getDate() + diff);
+      const key = `${mon.getFullYear()}-${String(mon.getMonth()+1).padStart(2,'0')}-${String(mon.getDate()).padStart(2,'0')}`;
       if (!wkMap[key]) wkMap[key] = [];
       wkMap[key].push(pct(p.score, p.maxScore));
     });
@@ -349,10 +356,13 @@ async function renderTrends(el) {
     const wkMap = {};
     all.forEach(p => {
       if (!p.date) return;
-      const d = new Date(p.date);
+      const [yr, mo, dy] = p.date.split('-').map(Number);
+      const d = new Date(yr, mo - 1, dy);
+      const dow = d.getDay();
+      const diff = dow === 0 ? -6 : 1 - dow;
       const mon = new Date(d);
-      mon.setDate(d.getDate() - ((d.getDay()+6)%7));
-      const key = mon.toISOString().split('T')[0];
+      mon.setDate(d.getDate() + diff);
+      const key = `${mon.getFullYear()}-${String(mon.getMonth()+1).padStart(2,'0')}-${String(mon.getDate()).padStart(2,'0')}`;
       wkMap[key] = (wkMap[key]||0) + 1;
     });
     return wkMap;
