@@ -325,8 +325,9 @@ async function renderTrends(el) {
     const labels  = weeks.map(w => new Date(w).toLocaleDateString('en-GB',{day:'numeric',month:'short'}));
 
     if (!weeks.length) {
-      canvas.parentElement.querySelector('.card-subtitle').textContent = 'No data yet';
-      canvas.remove();
+      const sub = canvas?.parentElement?.querySelector('.card-subtitle');
+      if (sub) sub.textContent = 'No data yet';
+      canvas.style.display = 'none';
       continue;
     }
 

@@ -76,6 +76,9 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Only cache GET requests
+  if (event.request.method !== 'GET') return;
+
   // Cache-first for everything else (app shell, fonts, chart.js)
   event.respondWith(
     caches.match(event.request).then(cached => {
@@ -98,3 +101,4 @@ self.addEventListener('fetch', event => {
     })
   );
 });
+

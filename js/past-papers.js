@@ -313,7 +313,9 @@ Router.register('past-papers', (root) => {
         const canvas = gridEl.querySelector('#yearTrendChart');
         if (yearChart) { yearChart.destroy(); yearChart = null; }
         if (!allYears.length) {
-          canvas.parentElement.querySelector('.card-subtitle').textContent = 'No data logged yet for this round';
+          const sub = canvas?.parentElement?.querySelector('.card-subtitle');
+          if (sub) sub.textContent = 'No data logged yet for this round';
+          if (canvas) canvas.style.display = 'none';
           return;
         }
         yearChart = new Chart(canvas, {
