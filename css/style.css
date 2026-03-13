@@ -401,6 +401,16 @@ textarea.input { resize: vertical; min-height: 80px; }
 /* ─── Syllabus item ─── */
 .syllabus-item { display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border-radius: var(--radius-md); border: 1.5px solid var(--cream-dark); background: var(--white); transition: var(--transition); }
 .syllabus-item:hover { border-color: var(--rose); background: rgba(232,180,184,0.04); }
+
+/* New chapter cards */
+.syllabus-chapter { border: 1.5px solid var(--cream-dark); background: var(--white); border-radius: var(--radius-lg); transition: var(--transition); }
+.syllabus-chapter:hover { border-color: rgba(232,180,184,0.6); }
+.syllabus-ch-header:hover { background: rgba(250,247,242,0.8); }
+.syl-sub-row:last-of-type { border-bottom: none !important; }
+.syl-sub-row:hover { background: rgba(250,247,242,0.9); border-radius: var(--radius-sm); }
+.sub-status-btn { border: 1px solid var(--cream-dark) !important; font-size:0.72rem !important; transition: var(--transition); }
+.sub-status-btn:hover { background: var(--cream-dark) !important; }
+.syl-subtopics { background: rgba(250,247,242,0.4); }
 .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .dot-not-started { background: var(--cream-dark); border: 2px solid var(--muted); }
 .dot-in-progress { background: var(--gold); }
